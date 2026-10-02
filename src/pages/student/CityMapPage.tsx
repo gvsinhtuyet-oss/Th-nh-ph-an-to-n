@@ -28,6 +28,17 @@ interface CityMapPageProps {
 
 type ViewMode = 'grade_track' | 'all_changs';
 
+interface AreaGroup {
+  areaId: string;
+  areaName: string;
+  areaIcon: string;
+  stations: Array<{
+    task: LearningTask;
+    stationConfig: StudentStationConfig;
+    indexInGrade: number;
+  }>;
+}
+
 export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => {
   const [selectedGrade, setSelectedGrade] = useState<Grade>(1);
   const [viewMode, setViewMode] = useState<ViewMode>('grade_track');
@@ -35,7 +46,6 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
   const [gradeTasks, setGradeTasks] = useState<LearningTask[]>([]);
   const [allTasks, setAllTasks] = useState<LearningTask[]>([]);
   const [progressMap, setProgressMap] = useState<Record<string, JourneyProgress>>({});
-  const [stations, setStations] = useState<StudentStationConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,7 +69,6 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
     setMissions(allM);
     setGradeTasks(gTasks);
     setAllTasks(totalTasks);
-    setStations(getStudentStations(selectedGrade));
 
     // Load progress for missions
     const progRecord: Record<string, JourneyProgress> = {};
@@ -89,49 +98,44 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
     }
   };
 
-  // Group gradeTasks by Mission (Chặng)
-  const activeChangs: Array<{
-    mission: Mission;
-    areaName?: string;
-    areaIcon?: string;
-    tasks: Array<{ task: LearningTask; indexInGrade: number; stationConfig?: StudentStationConfig }>;
-  }> = [];
+  // Group stations by Area (stationConfig.areaId) from studentStations.ts
+  const studentStationsList = getStudentStations(selectedGrade);
+  const activeAreas: AreaGroup[] = [];
 
   for (let i = 0; i < gradeTasks.length; i++) {
     const task = gradeTasks[i];
     const indexInGrade = i + 1; // 1 to totalInGrade (e.g. 1/5 .. 5/5)
-    const stationConfig = stations.find((s) => s.order === indexInGrade) || stations[i];
-    let group = activeChangs.find((g) => g.mission.id === task.missionId);
+    const stationConfig = studentStationsList.find((s) => s.order === indexInGrade) || studentStationsList[i];
+    const areaId = stationConfig?.areaId || `area-${task.missionId}`;
+    const areaName = stationConfig?.areaName || 'Khu Vực An Toàn';
+    const areaIcon = stationConfig?.areaIcon || '🚦';
+
+    let group = activeAreas.find((g) => g.areaId === areaId);
     if (!group) {
-      const m = missions.find((item) => item.id === task.missionId) || {
-        id: task.missionId,
-        order: Number(task.missionId.replace('m', '')) || 1,
-        title: `Chặng ${task.missionId.replace('m', '')}`,
-        gameTitle: '',
-        icon: task.icon || '🚦',
-        districtName: '',
-        learningTaskIds: [],
+      group = {
+        areaId,
+        areaName,
+        areaIcon,
+        stations: [],
       };
-      group = { 
-        mission: m, 
-        areaName: stationConfig?.areaName, 
-        areaIcon: stationConfig?.areaIcon, 
-        tasks: [] 
-      };
-      activeChangs.push(group);
+      activeAreas.push(group);
     }
-    group.tasks.push({ task, indexInGrade, stationConfig });
+    group.stations.push({
+      task,
+      stationConfig,
+      indexInGrade,
+    });
   }
 
-  // Count completed tasks for current Cấp
+  // Count completed stations for current Cấp
   const completedInGrade = gradeTasks.filter((t) => {
     return Boolean(progressMap[t.missionId]?.stages[t.id]?.completed);
   }).length;
-  const totalInGrade = gradeTasks.length || 5;
+  const totalInGrade = gradeTasks.length || studentStationsList.length || 5;
 
-  // Remaining Chặng outside of current Cấp (Khám phá thêm)
-  const activeChangIds = new Set(activeChangs.map((g) => g.mission.id));
-  const otherChangs = missions.filter((m) => !activeChangIds.has(m.id));
+  // Other missions outside of the active grade's journey for exploration
+  const activeMissionIds = new Set(gradeTasks.map((t) => t.missionId));
+  const otherMissions = missions.filter((m) => !activeMissionIds.has(m.id));
 
   return (
     <div className="space-y-6 pb-12">
@@ -148,7 +152,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
               🛡️ THỬ THÁCH THÀNH PHỐ AN TOÀN – CẤP {selectedGrade}
             </h1>
             <p className="text-sky-100 text-xs sm:text-sm font-semibold max-w-xl">
-              “Mỗi lựa chọn đúng – Thành phố thêm an toàn”. Vượt qua các nhiệm vụ theo từng chặng để rèn luyện kỹ năng an toàn và mở khóa huy hiệu dũng sĩ giao thông!
+              “Mỗi lựa chọn đúng – Thành phố thêm an toàn”. Vượt qua các trạm trên hành trình để rèn luyện kỹ năng an toàn và mở khóa những phần thưởng thú vị!
             </p>
           </div>
 
@@ -191,7 +195,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
           }`}
         >
           <Compass className="w-4 h-4" />
-          <span>Lộ Trình Cấp {selectedGrade} ({completedInGrade}/{totalInGrade} Nhiệm vụ)</span>
+          <span>Hành trình Cấp {selectedGrade} • {completedInGrade}/{totalInGrade} Trạm</span>
         </button>
 
         <button
@@ -206,7 +210,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Toàn Bộ 10 Chặng</span>
+          <span>🗺️ Khám phá Thành phố</span>
         </button>
       </div>
 
@@ -215,7 +219,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
         <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#0284c7_1px,transparent_1px)] [background-size:24px_24px]" />
 
         {/* =================================================================== */}
-        {/* VIEW 1: LỘ TRÌNH THEO CẤP (GOM NHIỆM VỤ THEO CHẶNG) */}
+        {/* VIEW 1: LỘ TRÌNH THEO CẤP (GOM THEO KHU VỰC & TRẠM) */}
         {/* =================================================================== */}
         {viewMode === 'grade_track' && (
           <div className="space-y-8 relative z-10">
@@ -228,7 +232,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                   </h2>
                 </div>
                 <p className="text-xs sm:text-sm font-bold text-sky-800 mt-1">
-                  Tiến trình: <span className="text-amber-600 font-black">{completedInGrade}/{totalInGrade}</span> nhiệm vụ đã chinh phục
+                  Tiến trình: <span className="text-amber-600 font-black">{completedInGrade}/{totalInGrade}</span> trạm đã chinh phục
                 </p>
               </div>
 
@@ -246,59 +250,58 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
               </div>
             </div>
 
-            {/* List of Grouped Chặng */}
+            {/* List of Grouped Areas */}
             <div className="space-y-6">
-              {activeChangs.map((group) => {
-                const changNumber = group.mission.order || group.mission.missionNumber || 1;
-                const changCompletedCount = group.tasks.filter(({ task }) => {
+              {activeAreas.map((group) => {
+                const areaCompletedCount = group.stations.filter(({ task }) => {
                   return Boolean(progressMap[task.missionId]?.stages[task.id]?.completed);
                 }).length;
-                const isChangFullyDone = changCompletedCount === group.tasks.length;
+                const isAreaFullyDone = areaCompletedCount === group.stations.length;
 
                 return (
                   <div
-                    key={group.mission.id}
+                    key={group.areaId}
                     className="bg-white/90 backdrop-blur-xs rounded-3xl p-5 sm:p-7 border-3 border-sky-200 shadow-md space-y-5"
                   >
-                    {/* CHẶNG HEADER (Rendered ONLY ONCE per Chặng) */}
+                    {/* KHU VỰC HEADER (Rendered ONLY ONCE per Khu Vực) */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-sky-100 pb-4">
                       <div className="flex items-center gap-3.5">
                         <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-400 to-blue-600 text-white flex items-center justify-center text-3xl shadow-md shadow-sky-500/20 shrink-0">
-                          {group.mission.icon || '🚦'}
+                          {group.areaIcon}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-[11px] font-black uppercase tracking-wider text-sky-800 bg-sky-100 px-2.5 py-0.5 rounded-full">
-                              CHẶNG {changNumber}
+                              KHU VỰC
                             </span>
                             <span className="text-xs font-bold text-slate-500">
-                              {group.tasks.length} Nhiệm vụ
+                              {group.stations.length} Trạm
                             </span>
                           </div>
                           <h2 className="text-lg sm:text-xl font-black text-slate-800 uppercase tracking-tight mt-0.5">
-                            {group.mission.title}
+                            {group.areaName}
                           </h2>
                         </div>
                       </div>
 
-                      {/* Chặng completion status */}
+                      {/* Area completion status */}
                       <div className="flex items-center gap-2">
-                        {isChangFullyDone ? (
+                        {isAreaFullyDone ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            Đã hoàn thành chặng
+                            ✅ Hoàn thành khu vực
                           </span>
                         ) : (
                           <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                            Tiến độ: {changCompletedCount}/{group.tasks.length}
+                            Tiến độ: {areaCompletedCount}/{group.stations.length} trạm
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* TASKS IN THIS CHẶNG (Grid layout) */}
+                    {/* STATIONS IN THIS AREA (Grid layout) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {group.tasks.map(({ task, indexInGrade }) => {
+                      {group.stations.map(({ task, stationConfig, indexInGrade }) => {
                         const missionProg = progressMap[task.missionId];
                         const stageProg = missionProg?.stages[task.id];
                         const isCompleted = Boolean(stageProg?.completed);
@@ -313,7 +316,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                             stageProg.phase === 'takeaway');
 
                         // Check if accessible:
-                        // First task in grade is unlocked, or previous task in grade is completed, or currently in progress
+                        // Trạm 1 mở đầu tiên. Trạm 2 mở sau khi Trạm 1 hoàn thành.
                         let isUnlocked = indexInGrade === 1 || isCompleted || Boolean(isInProgress);
                         if (!isUnlocked && indexInGrade > 1) {
                           const prevTask = gradeTasks[indexInGrade - 2];
@@ -352,6 +355,9 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                           statusBadgeClass = 'bg-sky-100 text-sky-800 border-sky-300';
                         }
 
+                        // Station display title: priority to stationConfig.stationTitle, fallback to task.title
+                        const stationDisplayTitle = stationConfig?.stationTitle || task.title;
+
                         return (
                           <div
                             key={task.id}
@@ -367,10 +373,10 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                             }`}
                           >
                             <div className="space-y-3">
-                              {/* Task Single Progress Label & Status */}
+                              {/* Station Progress Label & Status */}
                               <div className="flex items-center justify-between gap-2">
                                 <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase text-amber-900 bg-amber-100/90 px-3 py-1 rounded-full border border-amber-200">
-                                  <span>🎯 NHIỆM VỤ {indexInGrade}/{totalInGrade}</span>
+                                  <span>🚩 TRẠM {indexInGrade}/{totalInGrade}</span>
                                 </span>
 
                                 <span
@@ -380,9 +386,9 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                                 </span>
                               </div>
 
-                              {/* Task Title */}
+                              {/* Station Title */}
                               <h3 className="font-black text-base text-slate-800 group-hover:text-sky-600 transition-colors leading-snug">
-                                {task.title}
+                                {stationDisplayTitle}
                               </h3>
 
                               {/* 3 Gamified Levels Progress (🔍 Khám phá → 🧩 Giải mã → 🚦 Chinh phục) */}
@@ -494,37 +500,31 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
               })}
             </div>
 
-            {/* Chặng ngoài lộ trình chính (Khám phá thêm) */}
-            {otherChangs.length > 0 && (
+            {/* Khám phá thêm các chủ đề ngoài hành trình cấp */}
+            {otherMissions.length > 0 && (
               <div className="pt-6 border-t-2 border-dashed border-sky-200 space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black uppercase tracking-wider bg-slate-200 text-slate-700 px-3 py-1 rounded-full">
                     📚 KHÁM PHÁ THÊM
                   </span>
                   <span className="text-xs font-bold text-slate-500">
-                    Các Chặng an toàn giao thông khác (không thuộc lộ trình chính Cấp {selectedGrade})
+                    Khám phá thêm các chủ đề an toàn giao thông ngoài hành trình Cấp {selectedGrade}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {otherChangs.map((m) => {
-                    const changNum = m.order || m.missionNumber || 1;
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {otherMissions.map((m) => {
                     return (
                       <div
                         key={m.id}
                         onClick={() => handleOpenChang(m.id)}
-                        className="p-4 rounded-2xl bg-white/70 hover:bg-white border border-slate-200 hover:border-sky-300 transition-all cursor-pointer opacity-75 hover:opacity-100 shadow-xs flex items-center justify-between gap-3"
+                        className="p-4 rounded-2xl bg-white/70 hover:bg-white border border-slate-200 hover:border-sky-300 transition-all cursor-pointer opacity-85 hover:opacity-100 shadow-xs flex items-center justify-between gap-3"
                       >
-                        <div className="flex items-center gap-2.5 truncate">
-                          <span className="text-2xl">{m.icon || '🚦'}</span>
-                          <div className="truncate">
-                            <span className="text-[10px] font-black uppercase text-slate-500 block">
-                              CHẶNG {changNum}
-                            </span>
-                            <span className="text-xs font-bold text-slate-800 truncate block">
-                              {m.title}
-                            </span>
-                          </div>
+                        <div className="flex items-center gap-3 truncate">
+                          <span className="text-2xl shrink-0">{m.icon || '🚦'}</span>
+                          <span className="text-xs font-bold text-slate-800 truncate block">
+                            {m.title}
+                          </span>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                       </div>
@@ -537,20 +537,20 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
         )}
 
         {/* =================================================================== */}
-        {/* VIEW 2: TOÀN BỘ 10 CHẶNG */}
+        {/* VIEW 2: KHÁM PHÁ THÀNH PHỐ */}
         {/* =================================================================== */}
         {viewMode === 'all_changs' && (
           <div className="space-y-6 relative z-10">
             <div className="border-b border-sky-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2">
-                  <span>🏙️ Toàn Bộ 10 Chặng ATGT Tiểu Học</span>
+                  <span>🏙️ KHÁM PHÁ THÀNH PHỐ AN TOÀN</span>
                   <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full">
-                    {missions.length} Chặng
+                    {missions.length} Chủ đề
                   </span>
                 </h2>
                 <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  10 chuyên đề lớn bao quát toàn diện các kỹ năng tham gia giao thông dành cho học sinh Tiểu học.
+                  Khám phá thêm các chủ đề và kỹ năng an toàn giao thông.
                 </p>
               </div>
             </div>
@@ -586,10 +586,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                           {mission.icon || '🏙️'}
                         </div>
                         <div className="text-right">
-                          <span className="text-[11px] font-black uppercase tracking-wider text-sky-800 bg-sky-100 px-2.5 py-0.5 rounded-full">
-                            CHẶNG {mission.order || mission.missionNumber}
-                          </span>
-                          <div className="mt-1">
+                          <div>
                             {isCompleted ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -597,7 +594,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                               </span>
                             ) : (
                               <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                                {completedTasksCount}/{totalTasksCount} Nhiệm vụ
+                                {completedTasksCount}/{totalTasksCount} nội dung
                               </span>
                             )}
                           </div>
@@ -617,10 +614,10 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                         </p>
                       </div>
 
-                      {/* Nhiệm vụ list inside this Chặng */}
+                      {/* Nội dung list inside this topic */}
                       <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1.5">
                         <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between">
-                          <span>Các nhiệm vụ ({changTasks.length}):</span>
+                          <span>Nội dung học tập ({changTasks.length}):</span>
                           <span className="text-sky-700 font-bold">🔍 Khám phá • 🧩 Giải mã • 🚦 Chinh phục</span>
                         </div>
                         <div className="space-y-1">
@@ -647,7 +644,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                     {/* Progress Bar & Footer */}
                     <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
                       <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                        <span>Tiến độ chặng:</span>
+                        <span>Tiến độ:</span>
                         <span className="font-black text-sky-700">{isCompleted ? '100%' : `${percent}%`}</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -667,7 +664,7 @@ export const CityMapPage: React.FC<CityMapPageProps> = ({ onSelectJourney }) => 
                           <span>{mission.finalBadge?.name || `Huy Hiệu ${mission.title}`}</span>
                         </span>
                         <span className="font-black text-xs text-sky-600 flex items-center gap-0.5 group-hover:translate-x-1 transition-transform">
-                          <span>Khám phá chặng</span>
+                          <span>Khám phá ▶</span>
                           <ChevronRight className="w-4 h-4" />
                         </span>
                       </div>
