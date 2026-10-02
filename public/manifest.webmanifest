@@ -1,0 +1,22 @@
+{
+  "short_name": "ThànhPhốAnToàn",
+  "name": "Thành Phố An Toàn - Học An Toàn Giao Thông",
+  "description": "Nền tảng học tập số game hóa về an toàn giao thông cho học sinh tiểu học",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0284c7",
+  "theme_color": "#0284c7",
+  "display": "standalone",
+  "orientation": "portrait-primary"
+}

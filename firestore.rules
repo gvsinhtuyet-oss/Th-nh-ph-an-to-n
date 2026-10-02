@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return request.auth.token.role != null ? request.auth.token.role : 'student';
+    }
+    
+    function isTeacherOrAdmin() {
+      return isAuthenticated() && (getUserRole() == 'teacher' || getUserRole() == 'admin');
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Published journeys, versions, stages, activities, rewards:
+    // Any student or visitor can read published curriculum
+    // Only Teacher / Admin can create, update, or archive
+    match /journeys/{journeyId} {
+      allow read: if resource.data.status == 'published' || isTeacherOrAdmin();
+      allow write: if isTeacherOrAdmin();
+    }
+    
+    match /journeyVersions/{versionId} {
+      allow read: if resource.data.status == 'published' || isTeacherOrAdmin();
+      allow write: if isTeacherOrAdmin();
+    }
+
+    match /stages/{stageId} {
+      allow read: if true;
+      allow write: if isTeacherOrAdmin();
+    }
+
+    match /activities/{activityId} {
+      allow read: if true;
+      allow write: if isTeacherOrAdmin();
+    }
+
+    match /rewards/{rewardId} {
+      allow read: if true;
+      allow write: if isTeacherOrAdmin();
+    }
+
+    // Student Progress & Personal Data
+    // Student can only read/write their own progress
+    match /studentProfiles/{profileId} {
+      allow read, write: if isOwner(profileId) || isTeacherOrAdmin();
+    }
+
+    match /journeyProgress/{progressId} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacherOrAdmin());
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+    }
+
+    match /inventory/{itemId} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacherOrAdmin());
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+    }
+
+    match /knowledgeNotebook/{cardId} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacherOrAdmin());
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+    }
+
+    match /certificates/{certId} {
+      allow read: if true; // Publicly verifiable with certificate code
+      allow write: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacherOrAdmin());
+      allow create: if isAuthenticated();
+    }
+
+    // Teacher assets, verified knowledge, evidence, settings
+    match /ritaSources/{sourceId} {
+      allow read, write: if isTeacherOrAdmin();
+    }
+
+    match /verifiedKnowledge/{chunkId} {
+      allow read: if resource.data.verified == true && resource.data.allowedForRita == true || isTeacherOrAdmin();
+      allow write: if isTeacherOrAdmin();
+    }
+
+    match /ritaOffline/{hintId} {
+      allow read: if true;
+      allow write: if isTeacherOrAdmin();
+    }
+
+    match /evidence/{evidenceId} {
+      allow read, write: if isTeacherOrAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isTeacherOrAdmin();
+    }
+  }
+}

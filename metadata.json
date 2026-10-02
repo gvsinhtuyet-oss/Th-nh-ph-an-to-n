@@ -1,0 +1,6 @@
+{
+  "name": "Thành Phố An Toàn",
+  "description": "Nền tảng học tập số game hóa về an toàn giao thông cho học sinh tiểu học lớp 1–5",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
